@@ -1,12 +1,16 @@
 /*
- * PHASE 0 試作品：すべてダミーデータです。
- * PHASE 1以降、この dummyData と同じ形のデータを
- * 実際のAPI/データベースから取得するように置き換えていきます。
+ * ダッシュボード・AI社員一覧は、まだPHASE 0のダミーデータのままです。
+ * 「Instagram投稿一覧」タブだけは、PHASE 1で作ったバックエンド
+ * （ai-company/backend）に接続し、実際のInstagramデータを表示します。
+ * バックエンドが起動していない・接続情報が未設定の場合は、その旨を
+ * 分かりやすく案内する画面になります。
  *
  * PC幅とスマホ幅では画面の組み立て方そのものを変えているため、
  * 同じデータから「デスクトップ用のHTML」と「スマホ用のHTML」の
  * 両方を作り、CSS（720px以下）でどちらを表示するか切り替えています。
  */
+
+const BACKEND_URL = "http://127.0.0.1:8001";
 
 const dummyData = {
   ceoDecision: {
@@ -411,6 +415,125 @@ function renderEmployees() {
     </div>`;
 }
 
+/* ---------------- Instagram投稿一覧（実データ / バックエンド接続） ---------------- */
+
+function igNumber(v) {
+  return v === null || v === undefined ? "—" : Number(v).toLocaleString("ja-JP");
+}
+
+function igDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+function igPostCardHtml(p) {
+  const caption = (p.caption || "（キャプションなし）").slice(0, 60);
+  const thumb = p.thumbnail_url
+    ? `<img class="ig-post-thumb" src="${p.thumbnail_url}" alt="">`
+    : `<div class="ig-post-thumb"></div>`;
+  return `
+    <div class="ig-post-card">
+      ${thumb}
+      <div class="ig-post-body">
+        <div class="ig-post-date">${igDate(p.posted_at)}・${p.media_type || ""}</div>
+        <div class="ig-post-caption">${caption}${(p.caption || "").length > 60 ? "…" : ""}</div>
+        <div class="ig-post-metrics">
+          <span>リーチ <strong>${igNumber(p.reach)}</strong></span>
+          <span>いいね <strong>${igNumber(p.likes)}</strong></span>
+          <span>コメント <strong>${igNumber(p.comments)}</strong></span>
+          <span>保存 <strong>${igNumber(p.saved)}</strong></span>
+          <span>シェア <strong>${igNumber(p.shares)}</strong></span>
+          <span>再生 <strong>${igNumber(p.plays)}</strong></span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function igSyncButtonHtml() {
+  return `<button class="btn-primary" data-action="sync-instagram">今すぐ同期する</button>`;
+}
+
+function igMessageCardHtml(title, body, showSyncButton) {
+  return `
+    <div class="soon-wrap">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">${title}</div>
+      <div style="margin-top:8px;font-size:13px;color:var(--text-muted);max-width:520px;margin-left:auto;margin-right:auto;line-height:1.7">${body}</div>
+      ${showSyncButton ? `<div style="margin-top:16px">${igSyncButtonHtml()}</div>` : ""}
+    </div>`;
+}
+
+async function renderInstagram() {
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="soon-wrap">読み込み中…</div>`;
+
+  let res;
+  try {
+    res = await fetch(`${BACKEND_URL}/api/instagram/posts`);
+  } catch (err) {
+    app.innerHTML = igMessageCardHtml(
+      "バックエンドサーバーに接続できませんでした",
+      "ai-company/backend のサーバーが起動していない可能性があります。README「PHASE 1: Instagram接続」の手順でサーバーを起動してから、もう一度このタブを開いてください。",
+      false
+    );
+    return;
+  }
+
+  if (!res.ok) {
+    app.innerHTML = igMessageCardHtml("投稿データの取得に失敗しました", "少し時間をおいて再度お試しください。", false);
+    return;
+  }
+
+  const data = await res.json();
+  const posts = data.posts || [];
+
+  if (posts.length === 0) {
+    app.innerHTML = igMessageCardHtml(
+      "まだInstagramのデータが同期されていません",
+      "README「PHASE 1: Instagram接続」の手順で .env にアクセストークンを設定したら、下のボタンから同期してください。",
+      true
+    );
+    return;
+  }
+
+  app.innerHTML = `
+    <div class="section-title">Instagram投稿一覧（${posts.length}件）</div>
+    <div style="margin-bottom:14px">${igSyncButtonHtml()}</div>
+    <div class="ig-post-grid">${posts.map(igPostCardHtml).join("")}</div>
+  `;
+}
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-action='sync-instagram']");
+  if (!btn) return;
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "同期中…";
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/instagram/sync`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      const message = (data.detail && data.detail.message) || data.detail || "同期に失敗しました。";
+      document.getElementById("app").innerHTML = igMessageCardHtml("同期できませんでした", message, false);
+      return;
+    }
+  } catch (err) {
+    document.getElementById("app").innerHTML = igMessageCardHtml(
+      "バックエンドサーバーに接続できませんでした",
+      "サーバーが起動しているか確認してください。",
+      false
+    );
+    return;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+
+  renderInstagram();
+});
+
 function renderSoon() {
   const items = dummyData.upcomingScreens
     .map((s) => `<div class="soon-item">${s}</div>`)
@@ -426,6 +549,7 @@ function renderSoon() {
 const routes = {
   dashboard: renderDashboard,
   employees: renderEmployees,
+  instagram: renderInstagram,
   soon: renderSoon,
 };
 
@@ -433,7 +557,12 @@ function setTab(tab) {
   document.querySelectorAll(".tab").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === tab);
   });
-  document.getElementById("app").innerHTML = routes[tab]();
+  const result = routes[tab]();
+  // renderInstagram は非同期でDOMを直接更新するため、
+  // 文字列を返すルート（ダッシュボード等）のときだけここで反映する。
+  if (typeof result === "string") {
+    document.getElementById("app").innerHTML = result;
+  }
 }
 
 document.getElementById("tabs").addEventListener("click", (e) => {

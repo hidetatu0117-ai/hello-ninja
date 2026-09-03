@@ -1,0 +1,16 @@
+# 秘密情報（APIキー・アクセストークンなど）は絶対にコミットしない
+.env
+ai-company/backend/.env
+
+# データベースファイル（個人のデータなのでGitには含めない）
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
