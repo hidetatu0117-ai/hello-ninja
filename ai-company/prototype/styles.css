@@ -467,6 +467,175 @@ body {
 @media (max-width: 560px) {
   .app-header { padding: 12px 14px 0; }
   #app { padding: 18px 14px 60px; }
-  .ceo-hero { padding: 20px; }
-  .ceo-task { font-size: 19px; }
 }
+
+/* ==================================================
+   PC / スマホでダッシュボードの組み立てを丸ごと切り替える
+   ================================================== */
+
+.only-desktop { display: block; }
+.only-mobile { display: none; }
+
+@media (max-width: 720px) {
+  .only-desktop { display: none; }
+  .only-mobile { display: block; }
+}
+
+/* ---- スマホ版：AI社長ヒーロー（ファーストビュー最優先） ---- */
+
+.m-hero {
+  background: linear-gradient(135deg, #5b46f0, #17c3ec);
+  border-radius: var(--radius-lg);
+  padding: 20px 20px 18px;
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.m-hero-label {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.m-hero-task {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 8px 0 10px;
+}
+
+.m-hero-reason {
+  font-size: 13px;
+  line-height: 1.65;
+  opacity: 0.95;
+  margin: 0 0 10px;
+}
+
+.m-hero-time {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* ---- スマホ版：縦型ボトルネックステップ ---- */
+
+.step-v-list { margin-top: 14px; }
+
+.step-v {
+  background: #f6f7fb;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.step-v.critical {
+  background: #fff1ee;
+  border: 1px solid #ffcfc2;
+}
+
+.step-v-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.step-v-label {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.step-v-value {
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.critical-tag {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bad);
+}
+
+.step-v-connector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+}
+
+.connector-bar {
+  flex: 1;
+  height: 4px;
+  background: #e6e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.connector-fill {
+  height: 100%;
+  background: var(--text-faint);
+  border-radius: 999px;
+}
+
+.step-v-connector.critical .connector-fill { background: var(--bad); }
+
+.connector-rate {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.step-v-connector.critical .connector-rate { color: var(--bad); font-weight: 700; }
+
+/* ---- スマホ版：優先度別KPI表示 ---- */
+
+.kpi-primary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.kpi-secondary-grid,
+.kpi-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.kpi-card.primary { padding: 18px 16px 16px; }
+.kpi-card.primary .kpi-value { font-size: 25px; }
+
+.kpi-card.secondary { padding: 12px 12px 10px; box-shadow: none; }
+.kpi-card.secondary .kpi-name { font-size: 11px; }
+.kpi-card.secondary .kpi-value { font-size: 16px; margin: 4px 0 2px; }
+.kpi-card.secondary .kpi-delta { font-size: 10.5px; }
+
+.kpi-card.reference { padding: 10px 10px 9px; background: #f9f9fc; box-shadow: none; }
+.kpi-card.reference .kpi-name { font-size: 10.5px; }
+.kpi-card.reference .kpi-value { font-size: 15px; margin: 3px 0 2px; }
+.kpi-card.reference .kpi-delta { font-size: 10px; }
+
+/* ---- スマホ版：タップで開く詳細（<details>） ---- */
+
+.m-details { margin-top: 12px; }
+
+.m-details summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent-a);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.m-details summary::-webkit-details-marker { display: none; }
+.m-details summary::after { content: "▸"; font-size: 11px; transition: transform 0.15s; }
+.m-details[open] summary::after { transform: rotate(90deg); }

@@ -2,6 +2,10 @@
  * PHASE 0 試作品：すべてダミーデータです。
  * PHASE 1以降、この dummyData と同じ形のデータを
  * 実際のAPI/データベースから取得するように置き換えていきます。
+ *
+ * PC幅とスマホ幅では画面の組み立て方そのものを変えているため、
+ * 同じデータから「デスクトップ用のHTML」と「スマホ用のHTML」の
+ * 両方を作り、CSS（720px以下）でどちらを表示するか切り替えています。
  */
 
 const dummyData = {
@@ -28,9 +32,19 @@ const dummyData = {
     { name: "YouTube登録者", value: "742人", delta: "+3人（前日比）", trend: "up" },
   ],
 
+  // note購入までの中間指標。KPIカードには存在しなかったのでスマホの
+  // 優先度別表示のために追加（今月のnote売上・note購入数と整合する数字）。
+  noteAccessMonth: { value: "1,940", delta: "+9%（前日比）", trend: "up" },
+  litlinkClickMonth: { value: "4,860", delta: "+12%（前日比）", trend: "up" },
+  notePurchaseRateMonth: { value: "0.72%", delta: "±0.0pt（前日比）", trend: "flat" },
+
   funnel: {
     title: "Instagram → lit.link → note のファネル（直近7日）",
     weakStep: 4,
+    // スマホの縦型ステップ表示で「どこが最大の離脱ポイントか」を
+    // 明示するためのインデックス（0始まり）。note購入への転換が
+    // 最も悪いという funnel.reason の内容と一致させている。
+    mobileCriticalIndex: 4,
     steps: [
       { label: "SNS表示", value: "128,400" },
       { label: "プロフィール\nアクセス", value: "3,210" },
@@ -43,11 +57,11 @@ const dummyData = {
   },
 
   changes: [
+    { platform: "note", desc: "アクセスは増加も購入は0件のまま" },
     { platform: "Instagram", desc: "保存率が平均より高い投稿が1件（+1.6倍）" },
     { platform: "TikTok", desc: "フォロー率が急上昇（+0.4pt）" },
     { platform: "YouTube", desc: "目立った変化なし" },
     { platform: "LINE", desc: "登録者+5人、開封率は横ばい" },
-    { platform: "note", desc: "アクセスは増加も購入は0件のまま" },
   ],
 
   rankingByViews: [
@@ -88,6 +102,9 @@ const dummyData = {
     { id: "admin", name: "AI管理担当", role: "AI社員の稼働状況管理", icon: "🛠️", status: "done", statusLabel: "全員の状況を集計済み", summary: "13名中9名が稼働中、4名はPHASE待機中です。", meta: "更新：たった今" },
   ],
 
+  // スマホでは最初にこの5名だけを表示し、残りは「もっと見る」に格納する。
+  mobilePriorityEmployeeIds: ["ceo", "ig", "note", "funnel", "litlink"],
+
   upcomingScreens: [
     "Instagram投稿一覧・詳細分析",
     "動画・サムネイル分析結果",
@@ -110,20 +127,69 @@ function trendSymbol(trend) {
   return { cls: "flat", arrow: "→" };
 }
 
-function renderDashboard() {
-  const d = dummyData;
+function parseNum(str) {
+  return Number(String(str).replace(/,/g, ""));
+}
 
-  const kpiHtml = d.kpis
-    .map((k) => {
-      const t = trendSymbol(k.trend);
-      return `
-      <div class="kpi-card">
+function kpiCardHtml(k, sizeClass) {
+  const t = trendSymbol(k.trend);
+  return `
+      <div class="kpi-card ${sizeClass || ""}">
         <div class="kpi-name">${k.name}</div>
         <div class="kpi-value">${k.value}</div>
         <div class="kpi-delta ${t.cls}">${t.arrow} ${k.delta}</div>
       </div>`;
-    })
-    .join("");
+}
+
+function rankItemHtml(r, index) {
+  return `
+      <li class="rank-item">
+        <div class="rank-index">${index}</div>
+        <div class="rank-body">
+          <div class="rank-title">${r.title}</div>
+          <div class="rank-sub">${r.sub}</div>
+        </div>
+        <div class="rank-metric">${r.metric}</div>
+      </li>`;
+}
+
+function rankListHtml(list, offset) {
+  return list.map((r, i) => rankItemHtml(r, i + 1 + (offset || 0))).join("");
+}
+
+function employeeCardHtml(e) {
+  return `
+      <div class="employee-card ${e.isCeo ? "ceo" : ""}">
+        <div class="employee-top">
+          <div class="employee-avatar">${e.icon}</div>
+          <div>
+            <div class="employee-name">${e.name}</div>
+            <div class="employee-role">${e.role}</div>
+          </div>
+        </div>
+        <span class="status-badge ${e.status}">${e.statusLabel}</span>
+        <div class="employee-summary">${e.summary}</div>
+        <div class="employee-meta">${e.meta}</div>
+      </div>`;
+}
+
+// 優先度の高いAI社員だけを先に表示し、残りは <details> でたたむ。
+// ダッシュボードの「AI社員の状況」とAI社員一覧タブの両方で使う。
+function employeeListMobileHtml(employees, priorityIds) {
+  const priority = priorityIds.map((id) => employees.find((e) => e.id === id)).filter(Boolean);
+  const rest = employees.filter((e) => !priorityIds.includes(e.id));
+  return `
+    <div class="employee-grid">${priority.map(employeeCardHtml).join("")}</div>
+    <details class="m-details">
+      <summary>その他のAI社員を見る（${rest.length}名）</summary>
+      <div class="employee-grid" style="margin-top:12px">${rest.map(employeeCardHtml).join("")}</div>
+    </details>`;
+}
+
+/* ---------------- デスクトップ（PC）向けダッシュボード ---------------- */
+
+function desktopDashboardHtml(d) {
+  const kpiHtml = d.kpis.map((k) => kpiCardHtml(k)).join("");
 
   const funnelStepsHtml = d.funnel.steps
     .map((s, i) => {
@@ -147,41 +213,10 @@ function renderDashboard() {
     )
     .join("");
 
-  const rankHtml = (list, badge) =>
-    list
-      .map(
-        (r, i) => `
-      <li class="rank-item">
-        <div class="rank-index">${i + 1}</div>
-        <div class="rank-body">
-          <div class="rank-title">${r.title}</div>
-          <div class="rank-sub">${r.sub}</div>
-        </div>
-        <div class="rank-metric">${r.metric}</div>
-      </li>`
-      )
-      .join("");
-
-  const employeeMiniHtml = d.employees
-    .slice(0, 6)
-    .map(
-      (e) => `
-      <div class="employee-card ${e.isCeo ? "ceo" : ""}">
-        <div class="employee-top">
-          <div class="employee-avatar">${e.icon}</div>
-          <div>
-            <div class="employee-name">${e.name}</div>
-            <div class="employee-role">${e.role}</div>
-          </div>
-        </div>
-        <span class="status-badge ${e.status}">${e.statusLabel}</span>
-        <div class="employee-summary">${e.summary}</div>
-        <div class="employee-meta">${e.meta}</div>
-      </div>`
-    )
-    .join("");
+  const employeeMiniHtml = d.employees.slice(0, 6).map(employeeCardHtml).join("");
 
   return `
+  <div class="only-desktop">
     <div class="ceo-hero">
       <div class="ceo-label">AI社長から今日の指示</div>
       <div class="ceo-task">${d.ceoDecision.task}</div>
@@ -208,40 +243,172 @@ function renderDashboard() {
       </div>
       <div class="card">
         <div class="rank-sub" style="margin-bottom:8px;font-weight:700;color:var(--text)">売上につながった投稿ランキング</div>
-        <ul class="rank-list">${rankHtml(d.rankingBySales)}</ul>
+        <ul class="rank-list">${rankListHtml(d.rankingBySales)}</ul>
         <div class="rank-sub" style="margin:16px 0 8px;font-weight:700;color:var(--text)">参考：再生数だけのランキング</div>
-        <ul class="rank-list">${rankHtml(d.rankingByViews)}</ul>
+        <ul class="rank-list">${rankListHtml(d.rankingByViews)}</ul>
       </div>
     </div>
 
     <div class="section-title">AI社員の状況</div>
     <div class="employee-grid">${employeeMiniHtml}</div>
-  `;
+  </div>`;
+}
+
+/* ---------------- スマホ向けダッシュボード ---------------- */
+/* 表示順は「今日の指示 → ボトルネック → note売上関連KPI →
+   直近の重要変化 → 売上につながった投稿 → AI社員の状況」の固定。 */
+
+function mobileHeroHtml(d) {
+  return `
+    <div class="m-hero">
+      <div class="m-hero-label">AI社長から今日の指示</div>
+      <div class="m-hero-task">${d.ceoDecision.task}</div>
+      <p class="m-hero-reason">${d.ceoDecision.conclusion}</p>
+      <div class="m-hero-time">${d.ceoDecision.updatedAt}</div>
+    </div>`;
+}
+
+function mobileBottleneckHtml(funnel) {
+  const nums = funnel.steps.map((s) => parseNum(s.value));
+
+  let html = "";
+  funnel.steps.forEach((s, i) => {
+    if (i > 0) {
+      const rate = nums[i] / nums[i - 1];
+      const pct = rate * 100;
+      const pctLabel = pct < 1 ? pct.toFixed(1) : Math.round(pct);
+      const isCritical = i === funnel.mobileCriticalIndex;
+      const fillWidth = Math.min(Math.max(pct, 3), 100);
+      html += `
+      <div class="step-v-connector ${isCritical ? "critical" : ""}">
+        <div class="connector-bar"><div class="connector-fill" style="width:${fillWidth}%"></div></div>
+        <div class="connector-rate">通過率 ${pctLabel}%${isCritical ? "・大きく離脱" : ""}</div>
+      </div>`;
+    }
+    const isCriticalStep = i === funnel.mobileCriticalIndex;
+    html += `
+      <div class="step-v ${isCriticalStep ? "critical" : ""}">
+        <div class="step-v-row">
+          <span class="step-v-label">${s.label.replace("\n", " ")}</span>
+          <span class="step-v-value">${s.value}</span>
+        </div>
+        ${isCriticalStep ? '<span class="critical-tag">⚠ ここが最大の離脱ポイント</span>' : ""}
+      </div>`;
+  });
+
+  return `
+    <div class="card">
+      <span class="bottleneck-flag">⚠ ${funnel.title}</span>
+      <div class="step-v-list">${html}</div>
+      <div class="bottleneck-reason">${funnel.reason}</div>
+    </div>`;
+}
+
+function mobileKpiHtml(d) {
+  const primary = [
+    { ...d.kpis.find((k) => k.name === "今日の売上") },
+    { ...d.kpis.find((k) => k.name === "今月のnote売上") },
+    { ...d.kpis.find((k) => k.name === "note購入数") },
+    { name: "note購入率", ...d.notePurchaseRateMonth },
+  ];
+  const secondary = [
+    { name: "noteアクセス", ...d.noteAccessMonth },
+    { name: "lit.linkクリック", ...d.litlinkClickMonth },
+    { ...d.kpis.find((k) => k.name === "LINE登録") },
+  ];
+  const reference = [
+    { ...d.kpis.find((k) => k.name === "Instagramフォロワー") },
+    { ...d.kpis.find((k) => k.name === "TikTokフォロワー") },
+    { ...d.kpis.find((k) => k.name === "YouTube登録者") },
+  ];
+
+  return `
+    <div class="kpi-primary-grid">${primary.map((k) => kpiCardHtml(k, "primary")).join("")}</div>
+    <div class="kpi-secondary-grid">${secondary.map((k) => kpiCardHtml(k, "secondary")).join("")}</div>
+    <details class="m-details">
+      <summary>参考：SNSのフォロワー数を見る</summary>
+      <div class="kpi-reference-grid" style="margin-top:10px">${reference.map((k) => kpiCardHtml(k, "reference")).join("")}</div>
+    </details>`;
+}
+
+function mobileChangesHtml(changes) {
+  const keyPlatforms = ["note", "Instagram"];
+  const key = changes.filter((c) => keyPlatforms.includes(c.platform));
+  const rest = changes.filter((c) => !keyPlatforms.includes(c.platform));
+  const rowHtml = (c) => `
+      <li class="change-row">
+        <span class="change-platform">${c.platform}</span>
+        <span class="change-desc">${c.desc}</span>
+      </li>`;
+
+  return `
+    <div class="card">
+      <ul class="change-list">${key.map(rowHtml).join("")}</ul>
+      <details class="m-details">
+        <summary>その他の変化を見る（${rest.length}件）</summary>
+        <ul class="change-list" style="margin-top:10px">${rest.map(rowHtml).join("")}</ul>
+      </details>
+    </div>`;
+}
+
+function mobileRankingHtml(d) {
+  const [top, ...restSales] = d.rankingBySales;
+
+  return `
+    <div class="card">
+      <div class="rank-sub" style="margin-bottom:8px;font-weight:700;color:var(--text)">売上につながった投稿ランキング</div>
+      <ul class="rank-list">${rankItemHtml(top, 1)}</ul>
+      <details class="m-details">
+        <summary>あと${restSales.length}件を見る</summary>
+        <ul class="rank-list" style="margin-top:10px">${rankListHtml(restSales, 1)}</ul>
+      </details>
+      <details class="m-details" style="margin-top:10px">
+        <summary>参考：再生数だけのランキングを見る</summary>
+        <ul class="rank-list" style="margin-top:10px">${rankListHtml(d.rankingByViews)}</ul>
+      </details>
+    </div>`;
+}
+
+function mobileDashboardHtml(d) {
+  return `
+  <div class="only-mobile">
+    ${mobileHeroHtml(d)}
+
+    <div class="section-title">現在のボトルネック</div>
+    ${mobileBottleneckHtml(d.funnel)}
+
+    <div class="section-title">note売上に関わる数字</div>
+    ${mobileKpiHtml(d)}
+
+    <div class="section-title">直近の重要な変化</div>
+    ${mobileChangesHtml(d.changes)}
+
+    <div class="section-title">売上につながった投稿</div>
+    ${mobileRankingHtml(d)}
+
+    <div class="section-title">AI社員の状況</div>
+    ${employeeListMobileHtml(d.employees, d.mobilePriorityEmployeeIds)}
+  </div>`;
+}
+
+function renderDashboard() {
+  const d = dummyData;
+  return desktopDashboardHtml(d) + mobileDashboardHtml(d);
 }
 
 function renderEmployees() {
-  const cards = dummyData.employees
-    .map(
-      (e) => `
-      <div class="employee-card ${e.isCeo ? "ceo" : ""}">
-        <div class="employee-top">
-          <div class="employee-avatar">${e.icon}</div>
-          <div>
-            <div class="employee-name">${e.name}</div>
-            <div class="employee-role">${e.role}</div>
-          </div>
-        </div>
-        <span class="status-badge ${e.status}">${e.statusLabel}</span>
-        <div class="employee-summary">${e.summary}</div>
-        <div class="employee-meta">${e.meta}</div>
-      </div>`
-    )
-    .join("");
+  const d = dummyData;
+  const desktopCards = d.employees.map(employeeCardHtml).join("");
 
   return `
-    <div class="section-title">AI社員一覧（13名）</div>
-    <div class="employee-grid">${cards}</div>
-  `;
+    <div class="only-desktop">
+      <div class="section-title">AI社員一覧（13名）</div>
+      <div class="employee-grid">${desktopCards}</div>
+    </div>
+    <div class="only-mobile">
+      <div class="section-title">AI社員一覧（13名）</div>
+      ${employeeListMobileHtml(d.employees, d.mobilePriorityEmployeeIds)}
+    </div>`;
 }
 
 function renderSoon() {
