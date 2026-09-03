@@ -9,6 +9,15 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data.db"
 
+# note・lit.link・LINEは公式APIが無い/取得しづらいため、手入力で記録する。
+# テーブル名・列名はこの辞書だけで管理しているので、値はすべてアプリ内部で
+# 決め打ちされたもの（利用者の入力がそのままSQLに入ることはない）。
+MANUAL_METRIC_TABLES = {
+    "note": {"table": "note_metrics", "columns": ["access", "purchases", "sales"]},
+    "litlink": {"table": "litlink_metrics", "columns": ["total_clicks", "note_clicks"]},
+    "line": {"table": "line_metrics", "columns": ["followers", "broadcasts_sent", "opens", "clicks"]},
+}
+
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -43,10 +52,67 @@ def init_db():
             plays INTEGER,
             UNIQUE(post_id, captured_at)
         );
+
+        CREATE TABLE IF NOT EXISTS note_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recorded_date TEXT NOT NULL,
+            access INTEGER,
+            purchases INTEGER,
+            sales INTEGER,
+            memo TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS litlink_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recorded_date TEXT NOT NULL,
+            total_clicks INTEGER,
+            note_clicks INTEGER,
+            memo TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS line_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recorded_date TEXT NOT NULL,
+            followers INTEGER,
+            broadcasts_sent INTEGER,
+            opens INTEGER,
+            clicks INTEGER,
+            memo TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
         """
     )
     conn.commit()
     conn.close()
+
+
+def insert_manual_metric(platform: str, recorded_date: str, values: dict, memo: str = None):
+    info = MANUAL_METRIC_TABLES[platform]
+    table = info["table"]
+    columns = info["columns"]
+    cols_sql = ", ".join(["recorded_date"] + columns + ["memo"])
+    placeholders = ", ".join(["?"] * (len(columns) + 2))
+    conn = get_connection()
+    conn.execute(
+        f"INSERT INTO {table} ({cols_sql}) VALUES ({placeholders})",
+        [recorded_date] + [values.get(c) for c in columns] + [memo],
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_manual_metrics(platform: str, limit: int = 30):
+    info = MANUAL_METRIC_TABLES[platform]
+    table = info["table"]
+    conn = get_connection()
+    rows = conn.execute(
+        f"SELECT * FROM {table} ORDER BY recorded_date DESC, id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def upsert_post(post: dict):

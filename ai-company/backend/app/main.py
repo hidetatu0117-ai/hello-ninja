@@ -2,10 +2,13 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from typing import Optional
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from . import db, instagram_client
 
@@ -111,3 +114,86 @@ def instagram_sync(limit: int = 25):
 def instagram_posts(limit: int = 25):
     """データベースに保存済みの投稿一覧（最新の数字つき）を返す。"""
     return {"posts": db.latest_posts_with_metrics(platform="instagram", limit=limit)}
+
+
+# ---------------- 手入力データ（note / lit.link / LINE） ----------------
+# 公式APIが無い、または個人利用では取得しづらいため、日ごとの数字を
+# 手入力で記録する。他のSNSと違い、ここは「AIが勝手に取得する」のではなく
+# 利用者自身がその日の数字を入力する運用（39番のルールとも自然に合致する）。
+
+
+class NoteMetricIn(BaseModel):
+    recorded_date: str
+    access: Optional[int] = None
+    purchases: Optional[int] = None
+    sales: Optional[int] = None
+    memo: Optional[str] = None
+
+
+class LitlinkMetricIn(BaseModel):
+    recorded_date: str
+    total_clicks: Optional[int] = None
+    note_clicks: Optional[int] = None
+    memo: Optional[str] = None
+
+
+class LineMetricIn(BaseModel):
+    recorded_date: str
+    followers: Optional[int] = None
+    broadcasts_sent: Optional[int] = None
+    opens: Optional[int] = None
+    clicks: Optional[int] = None
+    memo: Optional[str] = None
+
+
+@app.post("/api/manual/note")
+def add_note_metric(payload: NoteMetricIn):
+    db.insert_manual_metric(
+        "note",
+        payload.recorded_date,
+        {"access": payload.access, "purchases": payload.purchases, "sales": payload.sales},
+        payload.memo,
+    )
+    return {"ok": True}
+
+
+@app.get("/api/manual/note")
+def get_note_metrics(limit: int = 30):
+    return {"entries": db.list_manual_metrics("note", limit=limit)}
+
+
+@app.post("/api/manual/litlink")
+def add_litlink_metric(payload: LitlinkMetricIn):
+    db.insert_manual_metric(
+        "litlink",
+        payload.recorded_date,
+        {"total_clicks": payload.total_clicks, "note_clicks": payload.note_clicks},
+        payload.memo,
+    )
+    return {"ok": True}
+
+
+@app.get("/api/manual/litlink")
+def get_litlink_metrics(limit: int = 30):
+    return {"entries": db.list_manual_metrics("litlink", limit=limit)}
+
+
+@app.post("/api/manual/line")
+def add_line_metric(payload: LineMetricIn):
+    db.insert_manual_metric(
+        "line",
+        payload.recorded_date,
+        {
+            "followers": payload.followers,
+            "broadcasts_sent": payload.broadcasts_sent,
+            "opens": payload.opens,
+            "clicks": payload.clicks,
+        },
+        payload.memo,
+    )
+    return {"ok": True}
+
+
+@app.get("/api/manual/line")
+def get_line_metrics(limit: int = 30):
+    return {"entries": db.list_manual_metrics("line", limit=limit)}
